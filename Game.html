@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboTrip ~HRA~</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #gameArea {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background-color: #4682B4; /* Změněno na Steel Blue pro lepší kontrast */
+        }
+        #player {
+            width: 40px;
+            height: 60px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        #player::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 12px;
+            background-color: #000;
+            border-radius: 50%;
+        }
+        #player::after {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 28px;
+            background-color: #000;
+        }
+        .arm {
+            position: absolute;
+            width: 20px;
+            height: 2px;
+            background-color: #000;
+            top: 18px;
+        }
+        .arm.left {
+            left: 0;
+            transform: rotate(45deg);
+        }
+        .arm.right {
+            right: 0;
+            transform: rotate(-45deg);
+        }
+        .leg {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background-color: #000;
+            bottom: 0;
+        }
+        .leg.left {
+            left: 15px;
+            transform: rotate(15deg);
+        }
+        .leg.right {
+            right: 15px;
+            transform: rotate(-15deg);
+        }
+        #parachute {
+            width: 60px;
+            height: 30px;
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 50% 50% 0 0;
+            border: 2px solid #FF6347;
+            border-bottom: none;
+        }
+        .obstacle {
+            width: 60px;
+            height: 30px;
+            position: absolute;
+            background-color: #FFFFFF;
+            border-radius: 30px;
+            z-index: 5;
+        }
+        .cloud {
+            position: absolute;
+            background-color: #B0E2FF; /* Změněno na světle modrou */
+            border-radius: 50%;
+            opacity: 0.8;
+            z-index: 1;
+            box-shadow: 0 0 10px #87CEFA; /* Přidán stín pro lepší viditelnost */
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #FFF; /* Změněno na bílou pro lepší čitelnost */
+            font-size: 20px;
+            z-index: 20;
+        }
+        #stopPlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 20;
+            background-color: #FF6347;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #gameTitle {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            font-weight: bold;
+            color: #FFF; /* Změněno na bílou pro lepší čitelnost */
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 20;
+        }
+        #endScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+            z-index: 30;
+            display: none;
+        }
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: #FF6347;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameArea">
+        <div id="gameTitle">RoboTrip ~HRA~</div>
+        <div id="player">
+            <div id="parachute"></div>
+            <div class="arm left"></div>
+            <div class="arm right"></div>
+            <div class="leg left"></div>
+            <div class="leg right"></div>
+        </div>
+        <div id="score">Skóre: 0</div>
+        <button id="stopPlay">Stop</button>
+    </div>
+    <div id="endScreen">
+        <h2>Konec hry</h2>
+        <p id="finalScore"></p>
+        <button id="restartButton">Hrát znovu</button>
+    </div>
+    <audio id="backgroundMusic" loop>
+        <source src="https://soundimage.org/wp-content/uploads/2023/01/Quiet-Steady-Progress.mp3" type="audio/mpeg">
+        Váš prohlížeč nepodporuje audio element.
+    </audio>
+
+    <script>
+        const player = document.getElementById('player');
+        const parachute = document.getElementById('parachute');
+        const gameArea = document.getElementById('gameArea');
+        const scoreElement = document.getElementById('score');
+        const stopPlayButton = document.getElementById('stopPlay');
+        const endScreen = document.getElementById('endScreen');
+        const finalScore = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+        const backgroundMusic = document.getElementById('backgroundMusic');
+        let playerX = 50;
+        let gameSpeed = 5;
+        let score = 0;
+        let gameLoop;
+        let isGameRunning = true;
+        let obstacles = [];
+        let clouds = [];
+        let countA = 0.1;
+
+        function movePlayer(e) {
+            if (!isGameRunning) return;
+            switch(e.key) {
+                case 'a':
+                    playerX = Math.max(playerX - 2.5, 0);
+                    break;
+                case 'd':
+                    playerX = Math.min(playerX + 2.5, 100);
+                    break;
+                /*case 'w':
+                    gameSpeed = Math.max(gameSpeed - 0.5, 0.5);
+                    break;
+                case 's':
+                    gameSpeed = Math.min(gameSpeed + 0.5, 5);
+                    break; */
+            }
+            player.style.left = `${playerX}%`;
+        }
+
+        function createObstacle() {
+            const obstacle = document.createElement('div');
+            obstacle.classList.add('obstacle');
+            obstacle.style.left = Math.random() * (gameArea.offsetWidth - 60) + 'px';
+            obstacle.style.top = gameArea.offsetHeight + 'px';
+            gameArea.appendChild(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        function createCloud() {
+            const cloud = document.createElement('div');
+            cloud.classList.add('cloud');
+            cloud.style.width = Math.random() * 100 + 50 + 'px';
+            cloud.style.height = Math.random() * 60 + 30 + 'px';
+            cloud.style.left = Math.random() * gameArea.offsetWidth + 'px';
+            cloud.style.top = gameArea.offsetHeight + 'px';
+            cloud.speed = Math.random() * 0.5 + 0.5;
+            gameArea.appendChild(cloud);
+            clouds.push(cloud);
+        }
+
+        function checkCollision(obstacle) {
+            const playerRect = player.getBoundingClientRect();
+            const obstacleRect = obstacle.getBoundingClientRect();
+
+            return !(playerRect.bottom < obstacleRect.top || 
+                     playerRect.top > obstacleRect.bottom || 
+                     playerRect.right < obstacleRect.left || 
+                     playerRect.left > obstacleRect.right);
+        }
+
+        function updateGame() {
+            if (!isGameRunning) return;
+            
+            // Update obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obstacle = obstacles[i];
+                let obstacleY = parseFloat(obstacle.style.top) - gameSpeed;
+                obstacle.style.top = obstacleY + 'px';
+
+                if (obstacleY < -30) {
+                    obstacle.remove();
+                    obstacles.splice(i, 1);
+                    score++;
+                    countA+0.1;
+                    gameSpeed = Math.min(gameSpeed + 0.05);
+                    scoreElement.textContent = `Skóre: ${score}`;
+                } else if (checkCollision(obstacle)) {
+                    endGame();
+                    return;
+                }
+            }
+
+            // Update clouds
+            for (let i = clouds.length - 1; i >= 0; i--) {
+                let cloud = clouds[i];
+                let cloudY = parseFloat(cloud.style.top) - (cloud.speed * gameSpeed);
+                cloud.style.top = cloudY + 'px';
+
+                if (cloudY < -parseFloat(cloud.style.height)) {
+                    cloud.remove();
+                    clouds.splice(i, 1);
+                }
+            }
+
+            // Create new obstacles and clouds
+            if (Math.random() < countA) { //0.02
+                createObstacle();
+            }
+            if (Math.random() < 0.05) {
+                createCloud();
+            }
+        }
+
+        function startGame() {
+            isGameRunning = true;
+            score = 0;
+            playerX = 50;
+            gameSpeed = 5;
+            player.style.left = `${playerX}%`;
+            scoreElement.textContent = `Skóre: ${score}`;
+            endScreen.style.display = 'none';
+            stopPlayButton.textContent = 'Stop';
+            backgroundMusic.play();
+            
+            // Clear all existing obstacles and clouds
+            obstacles.forEach(obstacle => obstacle.remove());
+            clouds.forEach(cloud => cloud.remove());
+            obstacles = [];
+            clouds = [];
+            
+            if (!gameLoop) {
+                gameLoop = setInterval(updateGame, 20);
+            }
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            clearInterval(gameLoop);
+            gameLoop = null;
+            finalScore.textContent = `Vaše skóre: ${score}`;
+            endScreen.style.display = 'flex';
+            backgroundMusic.pause();
+        }
+
+        function toggleGame() {
+            if (isGameRunning) {
+                isGameRunning = false;
+                stopPlayButton.textContent = 'Play';
+                backgroundMusic.pause();
+            } else {
+                isGameRunning = true;
+                stopPlayButton.textContent = 'Stop';
+                backgroundMusic.play();
+                if (!gameLoop) {
+                    gameLoop = setInterval(updateGame, 20);
+                }
+            }
+        }
+
+        document.addEventListener('keydown', movePlayer);
+        stopPlayButton.addEventListener('click', toggleGame);
+        restartButton.addEventListener('click', startGame);
+        startGame();
+    </script>
+</body>
+</html>
